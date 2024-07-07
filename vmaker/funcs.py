@@ -18,3 +18,5 @@ def copy(source: Path, dest: Path):
 		throw("copying", str(e))
 		return False
 
+def cut():
+	pass

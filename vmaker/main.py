@@ -1,4 +1,6 @@
+import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -8,27 +10,29 @@ import rich
 from rich.console import Console
 from rich.prompt import Prompt
 
-from vmaker.constants import Actions
+from vmaker.constants import RenameActions, Lists, RenameStrategies
 from vmaker.funcs import copy
-from vmaker.utils import print_videos_info, get_latest_videos, env_init, count_videos, throw
+from vmaker.utils import print_videos_info, get_latest_videos, env_update, count_videos, throw, check_config
 
 app = typer.Typer()
 
-RAW_DIR = os.getenv("VMAKER_RAW_DIR")
+config = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
+
+RAW_DIR = config.get("raw_dir")
 RAW_PATH = RAW_DIR and Path(RAW_DIR)
-CLIP_DIR = os.getenv("VMAKER_CLIP_DIR")
+CLIP_DIR = config.get("clip_dir")
 CLIP_PATH = CLIP_DIR and Path(CLIP_DIR)
-OUTPUT_DIR = os.getenv("VMAKER_OUTPUT_DIR")
+OUTPUT_DIR = config.get("output_dir")
 OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
 
 CWD = Path.cwd()
 
 
-def throw_if_not_init():
-	if not (RAW_DIR and CLIP_DIR and OUTPUT_DIR):
-		err_console = Console(stderr=True, style="bold red")
-		err_console.print("Please run `vmaker init` first.")
-		sys.exit()
+# def throw_if_not_init():
+# 	if not (RAW_DIR and CLIP_DIR and OUTPUT_DIR):
+# 		err_console = Console(stderr=True, style="bold red")
+# 		err_console.print("Please run `vmaker init` first.")
+# 		sys.exit()
 
 
 @app.callback()
@@ -45,11 +49,11 @@ def init():
 	Config default settings for the first time.
 	If you want one of them to be changed, run `vmaker config [...]` instead.
 	"""
-	raw_dir = os.getenv("VMAKER_RAW_DIR") or Prompt.ask("The path where videos are recorded")
-	clip_dir = os.getenv("VMAKER_CLIP_DIR") or Prompt.ask("The path where clips are saved", default=f"{CWD / "clips"}")
-	output_dir = os.getenv("VMAKER_OUTPUT_DIR") or Prompt.ask("The path where final videos are saved",
-															  default=f"{CWD / "output"}")
-	env_init(raw_dir, clip_dir, output_dir)
+	raw_dir = RAW_DIR or Prompt.ask("The path where videos are recorded")
+	clip_dir = CLIP_DIR or Prompt.ask("The path where clips are saved", default=f"{CWD / "clips"}")
+	output_dir = OUTPUT_DIR or Prompt.ask("The path where final videos are saved",
+										  default=f"{CWD / "output"}")
+	env_update(raw_dir=raw_dir, clip_dir=clip_dir, output_dir=output_dir)
 	typer.echo("Success! If it still doesn't work well, please reboot the terminal.")
 
 
@@ -59,13 +63,13 @@ def config():
 
 @app.command()
 def add(
-		new_name: Annotated[str, typer.Argument(help="The new name of the video.")] = Actions.DONT_RENAME,
+		new_name: Annotated[str, typer.Argument(help="The new name of the video.")] = RenameActions.DONT_RENAME,
 		choose: Annotated[bool, typer.Option("--choose", "-c", help="Choose the video to add.")] = False,
 ):
 	"""
 	Add the latest recorded video to the clip folder.
 	"""
-	throw_if_not_init()
+	check_config() or throw("adding", "Config missing. Please run `vmaker init` first.")
 	if not choose:
 		video = get_latest_videos(RAW_PATH)[0]
 	else:
@@ -75,9 +79,9 @@ def add(
 		video = choices[int(index)]
 	suffix = video.suffix
 
-	if new_name == Actions.DONT_RENAME:
+	if new_name == RenameActions.DONT_RENAME:
 		final_name = video.name
-	elif new_name == Actions.RENAME_WITH_TIME:
+	elif new_name == RenameActions.RENAME_WITH_TIME:
 		final_name = video.stem + "_" + video.stat().st_mtime + suffix
 	else:
 		final_name = new_name + suffix
@@ -126,11 +130,32 @@ def rm(
 
 
 @app.command()
-def dir():
+def cut(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be cut")] = "",
+		start_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")] = "00:00:00",
+		end_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")] = "00:00:00",
+		rename_strategy: Annotated[int, typer.Option("--rename", "-r", help="Rename strategy. See the doc for more choices.")] = RenameStrategies.DONT_RENAME
+):
 	"""
-	Show source directory, destination directory and video output directory.
+	Cut a video by given start and end time.
 	"""
-	throw_if_not_init()
-	rich.print(f"[green]RAW Dir[/green]: [link=file:///{RAW_DIR}]{RAW_DIR}[/link]")
-	rich.print(f"[green]CLIP Dir[/green]: [link=file:///{CLIP_DIR}]{CLIP_DIR}[/link]")
-	rich.print(f"[green]OUTPUT Dir[/green]: [link=file:///{OUTPUT_DIR}]{OUTPUT_DIR}[/link]")
+	if not (re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$", start_time) and re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$", end_time)):
+		throw("cutting", "Invalid time format. Correct format: `01:02:03`. ")
+	if rename_strategy == RenameStrategies.DONT_RENAME:
+
+
+
+
+
+
+@app.command()
+def list():
+	"""
+	Show configs.
+	"""
+	check_config() or throw("showing config", "Config missing. Please run `vmaker init` first.")
+	for k, v in config.items():
+		if k in Lists.DIR_CONFIG_LIST:
+			rich.print(f"[green]{k}[/green]: [link=file:///{v}]{v}[/link]")
+		else:
+			rich.print(f"[green]{k}[/green]: {v}")
