@@ -9,11 +9,11 @@ from rich.console import Console
 from rich.table import Table
 
 
-
 def env_init(raw_dir, clip_dir, output_dir):
 	_set_env_var("VMAKER_RAW_DIR", raw_dir)
 	_set_env_var("VMAKER_CLIP_DIR", clip_dir)
 	_set_env_var("VMAKER_OUTPUT_DIR", output_dir)
+	_set_env_var("VMAKER_CONFIG", str(Path.cwd()))
 
 
 def _set_env_var(name, value):
@@ -51,7 +51,18 @@ def print_videos_info(videos: list[Path]):
 	console.print(table)
 
 
-def get_latest_video(dir: Path, num=1):
+def get_latest_videos(dir: Path, num=1):
 	all_files = list(dir.glob('**/*'))
 	video_files = [file for file in all_files if file.suffix in ['.mp4', '.mkv']]
 	return sorted(video_files, key=lambda file: file.stat().st_mtime)[:num]
+
+
+def count_videos(dir: Path):
+	all_files = list(dir.glob('**/*'))
+	count = len([file for file in all_files if file.suffix in ['.mp4', '.mkv']])
+	rich.print(f"Now you have [green]{count}[/green] videos in {dir}.")
+
+
+def throw(situation: str, detail: str):
+	err_console = Console(stderr=True, style="bold red")
+	err_console.print(f"An error occurred when {situation}: \n{detail}")

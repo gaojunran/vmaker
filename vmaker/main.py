@@ -9,7 +9,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from vmaker.constants import Actions
-from vmaker.utils import print_videos_info, get_latest_video, env_init
+from vmaker.funcs import copy
+from vmaker.utils import print_videos_info, get_latest_videos, env_init, count_videos, throw
 
 app = typer.Typer()
 
@@ -21,6 +22,7 @@ OUTPUT_DIR = os.getenv("VMAKER_OUTPUT_DIR")
 OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
 
 CWD = Path.cwd()
+
 
 def throw_if_not_init():
 	if not (RAW_DIR and CLIP_DIR and OUTPUT_DIR):
@@ -36,6 +38,7 @@ def callback():
     """
 	pass
 
+
 @app.command()
 def init():
 	"""
@@ -44,13 +47,15 @@ def init():
 	"""
 	raw_dir = os.getenv("VMAKER_RAW_DIR") or Prompt.ask("The path where videos are recorded")
 	clip_dir = os.getenv("VMAKER_CLIP_DIR") or Prompt.ask("The path where clips are saved", default=f"{CWD / "clips"}")
-	output_dir = os.getenv("VMAKER_OUTPUT_DIR") or Prompt.ask("The path where final videos are saved", default=f"{CWD / "output"}")
+	output_dir = os.getenv("VMAKER_OUTPUT_DIR") or Prompt.ask("The path where final videos are saved",
+															  default=f"{CWD / "output"}")
 	env_init(raw_dir, clip_dir, output_dir)
 	typer.echo("Success! If it still doesn't work well, please reboot the terminal.")
 
 
 def config():
 	pass
+
 
 @app.command()
 def add(
@@ -62,19 +67,62 @@ def add(
 	"""
 	throw_if_not_init()
 	if not choose:
-		video = get_latest_video(RAW_PATH)
+		video = get_latest_videos(RAW_PATH)[0]
 	else:
-		choices = get_latest_video(RAW_PATH, 6)
+		choices = get_latest_videos(RAW_PATH, 6)
 		print_videos_info(choices)
 		index = Prompt.ask("Choose one from above: ", choices=["0", "1", "2", "3", "4", "5"], default="0")
 		video = choices[int(index)]
 	suffix = video.suffix
+
+	if new_name == Actions.DONT_RENAME:
+		final_name = video.name
+	elif new_name == Actions.RENAME_WITH_TIME:
+		final_name = video.stem + "_" + video.stat().st_mtime + suffix
+	else:
+		final_name = new_name + suffix
+
 	rich.print(
-		f"Will copy the video below to [green]{CLIP_DIR}[/green] with the new name [green]{new_name}{suffix}[/green]. ")
+		f"Will copy the video below to [green]{CLIP_DIR}[/green] with the new name [green]{final_name}[/green]. ")
 	print_videos_info([video])
 	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
 	if choice == "Y":
-		print("Success!")
+		# action
+		copy(video, CLIP_PATH / final_name)
+		rich.print("[bold green]Success![/bold green]")
+
+
+@app.command()
+def rm(
+		clip_name: Annotated[str, typer.Argument(help="The video name to remove.")] = "",
+):
+	"""
+	Remove the latest clip(by default) or a specified clip.
+	"""
+
+	if not clip_name:
+		rm_path = get_latest_videos(CLIP_PATH) and CLIP_PATH / get_latest_videos(CLIP_PATH)[0]
+	else:
+		rm_path = CLIP_PATH / clip_name
+
+	if not rm_path:
+		throw("removing", "No clip to remove.")
+		sys.exit()
+
+	if not rm_path.exists():
+		throw("removing", f"The file {rm_path} does not exist.")
+		sys.exit()
+
+	rich.print(
+		f"Will remove the video below: ")
+	print_videos_info([rm_path])
+	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
+	if choice == "Y":
+		# action
+		Path(rm_path).unlink()
+		rich.print("[bold green]Success![/bold green]")
+		count_videos(CLIP_PATH)
+	Path(rm_path).unlink()
 
 
 @app.command()
