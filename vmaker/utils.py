@@ -17,38 +17,6 @@ def check_config_exists():
 	return all(config.get(key) for key in Lists.CONFIG_LIST)
 
 
-def _is_valid_path(s):
-	try:
-		return Path(s).exists()
-	except OSError:
-		return False
-
-
-def _check_config_valid(**kwargs):
-	is_valid = _is_valid_path(kwargs.get("raw_dir")) and _is_valid_path(kwargs.get("clip_dir")) and _is_valid_path(kwargs.get("output_dir"))
-	is_valid or throw("...", "Incorrect config. Run `vmaker init` again.")
-
-
-def env_update(**kwargs):
-	_check_config_valid(**kwargs) or throw("...", "Run `vmaker init` first! ")
-	_set_env_var("VMAKER_CONFIG", json.dumps(kwargs))
-
-
-def _set_env_var(name, value):
-	system = platform.system()
-	if system == 'Windows':
-		# 设置Windows环境变量
-		subprocess.run(['setx', name, value], shell=True)
-	elif system in ('Linux', 'Darwin'):  # Darwin表示macOS
-		# 设置Linux或macOS环境变量
-		shell_config_file = os.path.expanduser('~/.bashrc')
-		with open(shell_config_file, 'a') as file:
-			file.write(f'\nexport {name}={value}\n')
-		print(f'Run `source {shell_config_file}` to make the changes effective.')
-	else:
-		raise NotImplementedError(f'Unsupported platform: {system}')
-
-
 def print_videos_info(videos: list[Path]):
 	table = Table()
 	table.add_column("Idx", justify="right", style="dim")
@@ -74,14 +42,31 @@ def get_latest_videos(dir: Path, num=1):
 	video_files = [file for file in all_files if file.suffix in ['.mp4', '.mkv']]
 	return sorted(video_files, key=lambda file: file.stat().st_mtime)[:num]
 
-def get_video_from_name(name: str, dir: Path):
-	pass
+
+def get_video_from_name(name: str, dir: Path) -> Path | None:
+	for file in dir.iterdir():
+		if file.suffix in Lists.VIDEO_EXTS and file.stem == name:
+			return file
+	else:
+		throw("finding the video to be cut", f"Video {name} not found.")
 
 
 def count_videos(dir: Path):
 	all_files = list(dir.glob('**/*'))
-	count = len([file for file in all_files if file.suffix in ['.mp4', '.mkv']])
+	count = len([file for file in all_files if file.suffix in Lists.VIDEO_EXTS])
 	rich.print(f"Now you have [green]{count}[/green] videos in {dir}.")
+
+
+def file_backup(file: Path, backup_dir: Path = None):
+	timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+	if backup_dir:
+		backup_file = backup_dir / (file.name + "_" + timestamp + '.bak')
+	else:
+		backup_file = file.with_name(file.name + "_" + timestamp + '.bak')
+	try:
+		backup_file.write_bytes(file.read_bytes())
+	except Exception as e:
+		throw(f"backing up the file {file.name}", str(e))
 
 
 def throw(situation: str, detail: str):

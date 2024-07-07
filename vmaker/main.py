@@ -10,19 +10,20 @@ import rich
 from rich.console import Console
 from rich.prompt import Prompt
 
-from vmaker.constants import RenameActions, Lists, RenameStrategies
-from vmaker.funcs import copy
-from vmaker.utils import print_videos_info, get_latest_videos, env_update, count_videos, throw, check_config
+from vmaker.constants import Lists, RenameStrategies
+from vmaker.funcs import copy, env_update, ffmpeg_cut
+from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
+	check_config_exists, get_video_from_name, file_backup
 
 app = typer.Typer()
 
-config = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
+CONFIG = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
 
-RAW_DIR = config.get("raw_dir")
+RAW_DIR = CONFIG.get("raw_dir")
 RAW_PATH = RAW_DIR and Path(RAW_DIR)
-CLIP_DIR = config.get("clip_dir")
+CLIP_DIR = CONFIG.get("clip_dir")
 CLIP_PATH = CLIP_DIR and Path(CLIP_DIR)
-OUTPUT_DIR = config.get("output_dir")
+OUTPUT_DIR = CONFIG.get("output_dir")
 OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
 
 CWD = Path.cwd()
@@ -47,7 +48,7 @@ def callback():
 def init():
 	"""
 	Config default settings for the first time.
-	If you want one of them to be changed, run `vmaker config [...]` instead.
+	If you want one of them to be changed, run `vmaker CONFIG [...]` instead.
 	"""
 	raw_dir = RAW_DIR or Prompt.ask("The path where videos are recorded")
 	clip_dir = CLIP_DIR or Prompt.ask("The path where clips are saved", default=f"{CWD / "clips"}")
@@ -63,13 +64,15 @@ def config():
 
 @app.command()
 def add(
-		new_name: Annotated[str, typer.Argument(help="The new name of the video.")] = RenameActions.DONT_RENAME,
+		new_name: Annotated[str, typer.Argument(help="The new name of the video.")] = "",
 		choose: Annotated[bool, typer.Option("--choose", "-c", help="Choose the video to add.")] = False,
+		rename_strategy: Annotated[int, typer.Option("--rename", "-r",
+													 help="Rename strategy only available when new_name is not given. See the doc for more choices.")] = RenameStrategies.DONT_RENAME
 ):
 	"""
 	Add the latest recorded video to the clip folder.
 	"""
-	check_config() or throw("adding", "Config missing. Please run `vmaker init` first.")
+	check_config_exists() or throw("adding", "Config missing. Please run `vmaker init` first.")
 	if not choose:
 		video = get_latest_videos(RAW_PATH)[0]
 	else:
@@ -79,10 +82,11 @@ def add(
 		video = choices[int(index)]
 	suffix = video.suffix
 
-	if new_name == RenameActions.DONT_RENAME:
-		final_name = video.name
-	elif new_name == RenameActions.RENAME_WITH_TIME:
-		final_name = video.stem + "_" + video.stat().st_mtime + suffix
+	if not new_name:
+		if rename_strategy == RenameStrategies.DONT_RENAME:
+			final_name = video.name
+		# elif rename_strategy == RenameStrategies.RENAME_WITH_TIME:
+		# 	final_name = video.stem + "_" + video.stat().st_mtime + suffix
 	else:
 		final_name = new_name + suffix
 
@@ -103,19 +107,17 @@ def rm(
 	"""
 	Remove the latest clip(by default) or a specified clip.
 	"""
-
+	check_config_exists() or throw("removing", "Config missing. Please run `vmaker init` first.")
 	if not clip_name:
 		rm_path = get_latest_videos(CLIP_PATH) and CLIP_PATH / get_latest_videos(CLIP_PATH)[0]
 	else:
 		rm_path = CLIP_PATH / clip_name
 
 	if not rm_path:
-		throw("removing", "No clip to remove.")
-		sys.exit()
+		throw("finding the latest video", "No clip to remove.")
 
 	if not rm_path.exists():
 		throw("removing", f"The file {rm_path} does not exist.")
-		sys.exit()
 
 	rich.print(
 		f"Will remove the video below: ")
@@ -131,21 +133,46 @@ def rm(
 
 @app.command()
 def cut(
-		clip_name: Annotated[str, typer.Argument(help="The video name to be cut")] = "",
-		start_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")] = "00:00:00",
-		end_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")] = "00:00:00",
-		rename_strategy: Annotated[int, typer.Option("--rename", "-r", help="Rename strategy. See the doc for more choices.")] = RenameStrategies.DONT_RENAME
+		clip_name: Annotated[str, typer.Argument(help="The video name to be cut.")],
+		start_time: Annotated[
+			str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")],
+		end_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")],
+		rename_strategy: Annotated[int, typer.Option("--rename", "-r",
+													 help="Rename strategy. See the doc for more choices.")] = RenameStrategies.RENAME_WITH_SUFFIX,
+		is_keep: Annotated[bool, typer.Option("--keep", "-k", help="Keep the original video or not.")] = False,
+		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
 ):
 	"""
 	Cut a video by given start and end time.
 	"""
-	if not (re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$", start_time) and re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$", end_time)):
-		throw("cutting", "Invalid time format. Correct format: `01:02:03`. ")
-	if rename_strategy == RenameStrategies.DONT_RENAME:
+	if not (re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$", start_time) and re.match(r"^[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+																			   end_time)):
+		throw("checking parameters", "Invalid time format. Correct format: `01:02:03`. ")
+
+	clip_input = get_video_from_name(clip_name, CLIP_PATH)
+	rich.print(
+		f"Will cut the video below from [green]{start_time}[/green] to [green]{end_time}[/green]. ")
+	print_videos_info([clip_input])
+	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
+	if choice == "Y":
+		# action
+		if rename_strategy == RenameStrategies.RENAME_WITH_SUFFIX:
+			is_backup and file_backup(clip_input, CLIP_PATH)
+			ffmpeg_cut(clip_input, start_time, end_time, clip_input.with_stem(clip_input.stem + "_cut"))
+		rich.print("[bold green]Success![/bold green]")
+	is_keep or clip_input.unlink()
 
 
-
-
+@app.command()
+def music(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be operated.")],
+		music: Annotated[str, typer.Argument(help="The music file path.")],
+		is_mute: Annotated[bool, typer.Option("--mute", "-m", help="Mute the original audio or not.")] = False,
+):
+	"""
+	Add background music to a video.
+	"""
+	pass
 
 
 @app.command()
@@ -153,8 +180,8 @@ def list():
 	"""
 	Show configs.
 	"""
-	check_config() or throw("showing config", "Config missing. Please run `vmaker init` first.")
-	for k, v in config.items():
+	check_config_exists() or throw("showing CONFIG", "Config missing. Please run `vmaker init` first.")
+	for k, v in CONFIG.items():
 		if k in Lists.DIR_CONFIG_LIST:
 			rich.print(f"[green]{k}[/green]: [link=file:///{v}]{v}[/link]")
 		else:
