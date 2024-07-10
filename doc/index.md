@@ -22,4 +22,3 @@ features:
   - title: Fun to Use
     details: A graceful CLI with detailed & accurate error information with the help of Typer.
 ---
-

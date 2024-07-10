@@ -2,17 +2,6 @@ import {defineConfig} from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-    locales: {
-        root: {
-            label: 'English',
-            lang: 'en',
-        },
-        zh_cn: {
-            label: '简体中文',
-            lang: 'zh-CN',
-            link: '/zh-CN/'
-        }
-    },
     title: "Vmaker Document",
     description: "Tutorial video maker for Programmers. Based on Typer & FFMpeg.",
     themeConfig: {
