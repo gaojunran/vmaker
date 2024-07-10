@@ -13,7 +13,7 @@ from rich.prompt import Prompt
 from vmaker.constants import Lists, RenameStrategies
 from vmaker.funcs import copy, env_update, ffmpeg_cut
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
-	check_config_exists, get_video_from_name, file_backup
+	check_config_exists, get_video_from_name, file_backup, is_valid_path, get_valid_path
 
 app = typer.Typer()
 
@@ -85,8 +85,8 @@ def add(
 	if not new_name:
 		if rename_strategy == RenameStrategies.DONT_RENAME:
 			final_name = video.name
-		# elif rename_strategy == RenameStrategies.RENAME_WITH_TIME:
-		# 	final_name = video.stem + "_" + video.stat().st_mtime + suffix
+	# elif rename_strategy == RenameStrategies.RENAME_WITH_TIME:
+	# 	final_name = video.stem + "_" + video.stat().st_mtime + suffix
 	else:
 		final_name = new_name + suffix
 
@@ -168,11 +168,32 @@ def music(
 		clip_name: Annotated[str, typer.Argument(help="The video name to be operated.")],
 		music: Annotated[str, typer.Argument(help="The music file path.")],
 		is_mute: Annotated[bool, typer.Option("--mute", "-m", help="Mute the original audio or not.")] = False,
+		rename_strategy: Annotated[int, typer.Option("--rename", "-r",
+													 help="Rename strategy. See the doc for more choices.")] = RenameStrategies.RENAME_WITH_SUFFIX,
+		is_keep: Annotated[bool, typer.Option("--keep", "-k", help="Keep the original video or not.")] = False,
+		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
 ):
 	"""
 	Add background music to a video.
 	"""
-	pass
+
+	is_valid_path(music) or throw("checking parameters", f"Invalid music file path {music}.")
+	clip_input = get_video_from_name(clip_name, CLIP_PATH)
+	rich.print(
+		f"Will add music [green]{music}[/green] to the video below. ")
+	print_videos_info([clip_input])
+	is_mute and rich.print("[blue]Will MUTE the original audio.[/blue]")
+	is_keep or rich.print("[blue]Will NOT keep the original video file.[/blue]")
+	is_backup and rich.print("[blue]Will back up the original video file.[/blue]")
+	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
+	if choice == "Y":
+		# action
+		if rename_strategy == RenameStrategies.RENAME_WITH_SUFFIX:
+			is_backup and file_backup(clip_input, CLIP_PATH)
+			is_mute and ffmpeg_mute(clip_input, clip_input.with_stem(clip_input.stem + "_mute"))
+			ffmpeg_music(clip_input, clip_input.with_stem(clip_input.stem + "_music"))
+		rich.print("[bold green]Success![/bold green]")
+	is_keep or clip_input.unlink()
 
 
 @app.command()

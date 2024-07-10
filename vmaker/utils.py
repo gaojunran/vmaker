@@ -12,6 +12,18 @@ from rich.table import Table
 from vmaker.constants import Lists
 
 
+def is_valid_path(s):
+	try:
+		return Path(s).exists()
+	except OSError:
+		return False
+
+def get_valid_path(s):
+	if is_valid_path(s):
+		return Path(s)
+	else:
+		throw(f"resolving path", f"{s} is not a valid path.")
+
 def check_config_exists():
 	config = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
 	return all(config.get(key) for key in Lists.CONFIG_LIST)
@@ -44,8 +56,10 @@ def get_latest_videos(dir: Path, num=1):
 
 
 def get_video_from_name(name: str, dir: Path) -> Path | None:
+
 	for file in dir.iterdir():
-		if file.suffix in Lists.VIDEO_EXTS and file.stem == name:
+		number = file.split('-')[0]
+		if file.suffix in Lists.VIDEO_EXTS and (file.stem == name or number == name):
 			return file
 	else:
 		throw("finding the video to be cut", f"Video {name} not found.")

@@ -7,14 +7,7 @@ import shutil
 
 import ffmpeg
 
-from vmaker.utils import throw
-
-
-def _is_valid_path(s):
-	try:
-		return Path(s).exists()
-	except OSError:
-		return False
+from vmaker.utils import throw, is_valid_path
 
 
 def _set_env_var(name, value):
@@ -33,7 +26,7 @@ def _set_env_var(name, value):
 
 
 def _check_config_valid(**kwargs):
-	is_valid = _is_valid_path(kwargs.get("raw_dir")) and _is_valid_path(kwargs.get("clip_dir")) and _is_valid_path(
+	is_valid = is_valid_path(kwargs.get("raw_dir")) and is_valid_path(kwargs.get("clip_dir")) and is_valid_path(
 		kwargs.get("output_dir"))
 	is_valid or throw("...", "Incorrect CONFIG. Run `vmaker init` again.")
 
@@ -62,3 +55,14 @@ def ffmpeg_cut(clip_input: Path, start_time: str, end_time: str, clip_output: Pa
 		.filter('trim', start=start_time, end=end_time) \
 		.output(str(clip_output.resolve())) \
 		.run()
+
+
+def ffmpeg_mute(clip_input: Path, music_input: Path, is_mute: bool, clip_output: Path):
+	ffmpeg.input(str(clip_input.resolve())) \
+		.filter('volume', 0) \
+		.output(str(clip_output.resolve())) \
+		.run()
+
+
+def ffmpeg_lyric():
+	pass
