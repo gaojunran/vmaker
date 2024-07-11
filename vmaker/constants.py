@@ -10,3 +10,12 @@ class Lists:
 	CONFIG_LIST = ["raw_dir", "clip_dir", "output_dir"]
 	DIR_CONFIG_LIST = ["raw_dir", "clip_dir", "output_dir"]
 	VIDEO_EXTS = [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv"]
+
+
+class Dicts:
+	CONFIG_TEMPLATE = {
+		"raw_dir": "",
+		"clip_dir": "",
+		"output_dir": "",
+		"curr_dirname": ""
+	}

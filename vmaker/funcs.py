@@ -10,19 +10,7 @@ import ffmpeg
 from vmaker.utils import throw, is_valid_path
 
 
-def _set_env_var(name, value):
-	system = platform.system()
-	if system == 'Windows':
-		# 设置Windows环境变量
-		subprocess.run(['setx', name, value], shell=True)
-	elif system in ('Linux', 'Darwin'):  # Darwin表示macOS
-		# 设置Linux或macOS环境变量
-		shell_config_file = os.path.expanduser('~/.bashrc')
-		with open(shell_config_file, 'a') as file:
-			file.write(f'\nexport {name}={value}\n')
-		print(f'Run `source {shell_config_file}` to make the changes effective.')
-	else:
-		raise NotImplementedError(f'Unsupported platform: {system}')
+
 
 
 def _check_config_valid(**kwargs):
@@ -32,9 +20,7 @@ def _check_config_valid(**kwargs):
 	is_valid or throw("...", "Incorrect CONFIG. Run `vmaker init` again.")
 
 
-def env_update(**kwargs):
-	_check_config_valid(**kwargs)
-	_set_env_var("VMAKER_CONFIG", json.dumps(kwargs))
+
 
 
 def copy(source: Path, dest: Path):

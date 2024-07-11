@@ -14,22 +14,22 @@ from vmaker.constants import Lists, RenameStrategies
 from vmaker.funcs import copy, env_update, ffmpeg_cut
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
 	get_video_from_name, file_backup, is_valid_path, list_dir
-from vmaker.config import check_config_exists, get_curr_dir
+from vmaker.config import check_config_exists, get_curr_dir, Config
 
 app = typer.Typer()
 
 CONFIG = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
 
-RAW_DIR = CONFIG.get("raw_dir")
-RAW_PATH = RAW_DIR and Path(RAW_DIR)
-CLIP_DIR = CONFIG.get("clip_dir")
-CLIP_PATH = CLIP_DIR and Path(CLIP_DIR)
-OUTPUT_DIR = CONFIG.get("output_dir")
-OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
+# RAW_DIR = CONFIG.get("raw_dir")
+# RAW_PATH = RAW_DIR and Path(RAW_DIR)
+# CLIP_DIR = CONFIG.get("clip_dir")
+# CLIP_PATH = CLIP_DIR and Path(CLIP_DIR)
+# OUTPUT_DIR = CONFIG.get("output_dir")
+# OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
 CWD = Path.cwd()
-
-CURR_DIR = CLIP_DIR and get_curr_dir()
-CURR_PATH = CURR_DIR and Path(CURR_DIR)
+#
+# CURR_DIR = CLIP_DIR and get_curr_dir()
+# CURR_PATH = CURR_DIR and Path(CURR_DIR)
 
 @app.callback()
 def callback():
@@ -43,17 +43,17 @@ def callback():
 def init():
 	"""
 	Config default settings for the first time.
-	If you want one of them to be changed, run `vmaker CONFIG [...]` instead.
+	If you want one of them to be changed, run `vmaker config [...]` instead.
 	"""
-	raw_dir = RAW_DIR or Prompt.ask("The path where videos are recorded")
-	clip_dir = CLIP_DIR or Prompt.ask("The path where clips are saved", default=f"{CWD / 'clips'}")
-	output_dir = OUTPUT_DIR or Prompt.ask("The path where final videos are saved",
+	raw_dir = Prompt.ask("The path where videos are recorded")
+	clip_dir = Prompt.ask("The path where clips are saved", default=f"{CWD / 'clips'}")
+	output_dir = Prompt.ask("The path where final videos are saved",
 										  default=f"{CWD / 'output'}")
-	get_curr_dir()
-
 	curr_dir_backup_choices = list_dir(clip_dir) + ["[Create New Directory...]"]
-	curr_dir_choice = CURR_DIR or ask("Choose a directory from below: ",choices=curr_dir_backup_choices)
-	env_update(raw_dir=raw_dir, clip_dir=clip_dir, output_dir=output_dir)
+	curr_dirname = ask("Choose a directory from below: ",choices=curr_dir_backup_choices)
+	if curr_dirname == "[Create New Directory...]":
+		curr_dirname = Prompt.ask("The name of the new directory")
+	Config.dump(Config(raw_dir, clip_dir, output_dir, curr_dirname))
 	typer.echo("Success! If it still doesn't work well, please reboot the terminal.")
 
 
@@ -86,11 +86,11 @@ def add(
 	"""
 	Add the latest recorded video to the clip folder.
 	"""
-	check_config_exists() or throw("initializing", "Config missing. Please run `vmaker init` first.")
+	config = Config.load()
 	if not choose:
-		video = get_latest_videos(RAW_PATH)[0]
+		video = get_latest_videos(config.raw_path)[0]
 	else:
-		choices = get_latest_videos(RAW_PATH, 6)
+		choices = get_latest_videos(config.raw_path, 6)
 		print_videos_info(choices)
 		index = Prompt.ask("Choose one from above: ", choices=["0", "1", "2", "3", "4", "5"], default="0")
 		video = choices[int(index)]
@@ -105,12 +105,12 @@ def add(
 		final_name = new_name + suffix
 
 	rich.print(
-		f"Will copy the video below to [green]{CLIP_DIR}[/green] with the new name [green]{final_name}[/green]. ")
+		f"Will copy the video below to [green]{str(config.clip_path)}[/green] with the new name [green]{final_name}[/green]. ")
 	print_videos_info([video])
 	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
 	if choice == "Y":
 		# action
-		copy(video, CLIP_PATH / final_name)
+		copy(video, config.clip_path / final_name)
 		rich.print("[bold green]Success![/bold green]")
 
 
