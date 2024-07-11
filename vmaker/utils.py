@@ -1,10 +1,9 @@
 import json
 import os
-import platform
-import subprocess
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import rich
 from rich.console import Console
 from rich.table import Table
@@ -12,17 +11,34 @@ from rich.table import Table
 from vmaker.constants import Lists
 
 
-def is_valid_path(s):
+def list_dir(dir: Path, only_dir=False):
+	if only_dir:
+		return [p for p in dir.iterdir() if p.is_dir()]
+
+
+def get_curr_dir(clip_dir: str, curr: str = ""):
+	clip_path = Path(clip_dir)
+	curr_name = os.getenv("VMAKER") or "default"
+	return str(clip_path / curr_name)
+
+
+def is_valid_path(s, allow_not_exist=False):
 	try:
-		return Path(s).exists()
+		if allow_not_exist:
+			Path(s).mkdir(parents=True, exist_ok=True)
+			return True
+		else:
+			return Path(s).exists()
 	except OSError:
 		return False
 
-def get_valid_path(s):
-	if is_valid_path(s):
+
+def get_valid_path(s, allow_not_exist=False):
+	if is_valid_path(s, allow_not_exist):
 		return Path(s)
 	else:
 		throw(f"resolving path", f"{s} is not a valid path.")
+
 
 def check_config_exists():
 	config = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
@@ -56,7 +72,6 @@ def get_latest_videos(dir: Path, num=1):
 
 
 def get_video_from_name(name: str, dir: Path) -> Path | None:
-
 	for file in dir.iterdir():
 		number = file.split('-')[0]
 		if file.suffix in Lists.VIDEO_EXTS and (file.stem == name or number == name):
@@ -87,3 +102,7 @@ def throw(situation: str, detail: str):
 	err_console = Console(stderr=True, style="bold red")
 	err_console.print(f"An error occurred when {situation}: \n{detail}")
 	sys.exit()
+
+
+if __name__ == '__main__':
+	print(get_curr_dir())

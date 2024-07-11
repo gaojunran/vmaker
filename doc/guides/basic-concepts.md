@@ -1,12 +1,12 @@
 # Basic Concepts
 
-## Workflow
+## Recommended Workflow
 
 Generally, Vmaker works in such a workflow: 
 
 - Record videos with OBS or other recorders 
 
-- Choose a satisfying video. Run `vmaker add`, adding it to the `clips` folder.
+- Choose a satisfying video. Run `vmaker add`, adding it to the `clip_dir` folder.
 
 - Run `vmaker cut`, `vmaker music`, `vmaker speed`, etc. to quickly modify the video without complicated GUI.
 

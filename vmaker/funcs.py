@@ -26,8 +26,9 @@ def _set_env_var(name, value):
 
 
 def _check_config_valid(**kwargs):
-	is_valid = is_valid_path(kwargs.get("raw_dir")) and is_valid_path(kwargs.get("clip_dir")) and is_valid_path(
-		kwargs.get("output_dir"))
+	is_valid = is_valid_path(kwargs.get("raw_dir"), allow_not_exist=True) and is_valid_path(kwargs.get("clip_dir"),
+																							allow_not_exist=True) and is_valid_path(
+		kwargs.get("output_dir"), allow_not_exist=True)
 	is_valid or throw("...", "Incorrect CONFIG. Run `vmaker init` again.")
 
 
@@ -38,7 +39,7 @@ def env_update(**kwargs):
 
 def copy(source: Path, dest: Path):
 	"""
-	Copy files from a dir to another. Two arguments are all `Path` of files.
+	Copy files from a dir to another. Two arguments are `Path` type of files.
 	"""
 	if os.path.exists(dest):
 		throw("copying", f"The file already exists in {dest}!")

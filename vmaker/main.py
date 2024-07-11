@@ -1,19 +1,19 @@
 import json
 import os
 import re
-import sys
 from pathlib import Path
 from typing import Annotated
 
-import typer
+from asker import ask
+
 import rich
-from rich.console import Console
+import typer
 from rich.prompt import Prompt
 
 from vmaker.constants import Lists, RenameStrategies
 from vmaker.funcs import copy, env_update, ffmpeg_cut
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
-	check_config_exists, get_video_from_name, file_backup, is_valid_path, get_valid_path
+	check_config_exists, get_video_from_name, file_backup, is_valid_path, get_curr_dir, list_dir
 
 app = typer.Typer()
 
@@ -25,16 +25,10 @@ CLIP_DIR = CONFIG.get("clip_dir")
 CLIP_PATH = CLIP_DIR and Path(CLIP_DIR)
 OUTPUT_DIR = CONFIG.get("output_dir")
 OUTPUT_PATH = OUTPUT_DIR and Path(OUTPUT_DIR)
-
 CWD = Path.cwd()
 
-
-# def throw_if_not_init():
-# 	if not (RAW_DIR and CLIP_DIR and OUTPUT_DIR):
-# 		err_console = Console(stderr=True, style="bold red")
-# 		err_console.print("Please run `vmaker init` first.")
-# 		sys.exit()
-
+CURR_DIR = CLIP_DIR and get_curr_dir()
+CURR_PATH = CURR_DIR and Path(CURR_DIR)
 
 @app.callback()
 def callback():
@@ -51,15 +45,34 @@ def init():
 	If you want one of them to be changed, run `vmaker CONFIG [...]` instead.
 	"""
 	raw_dir = RAW_DIR or Prompt.ask("The path where videos are recorded")
-	clip_dir = CLIP_DIR or Prompt.ask("The path where clips are saved", default=f"{CWD / "clips"}")
+	clip_dir = CLIP_DIR or Prompt.ask("The path where clips are saved", default=f"{CWD / 'clips'}")
 	output_dir = OUTPUT_DIR or Prompt.ask("The path where final videos are saved",
-										  default=f"{CWD / "output"}")
+										  default=f"{CWD / 'output'}")
+	get_curr_dir()
+
+	curr_dir_backup_choices = list_dir(clip_dir) + ["[Create New Directory...]"]
+	curr_dir_choice = CURR_DIR or ask("Choose a directory from below: ",choices=curr_dir_backup_choices)
 	env_update(raw_dir=raw_dir, clip_dir=clip_dir, output_dir=output_dir)
 	typer.echo("Success! If it still doesn't work well, please reboot the terminal.")
 
 
+@app.command()
 def config():
 	pass
+
+
+@app.command()
+def curr(
+		dir_name: Annotated[str, typer.Argument(help="The directory name to be set as current.")],
+):
+	"""
+	Set up the current working directory in `clip_dir`.
+	The directory will be created if it doesn't exist.
+	"""
+	check_config_exists() or throw("initializing", "Config missing. Please run `vmaker init` first.")
+
+
+
 
 
 @app.command()
@@ -72,7 +85,7 @@ def add(
 	"""
 	Add the latest recorded video to the clip folder.
 	"""
-	check_config_exists() or throw("adding", "Config missing. Please run `vmaker init` first.")
+	check_config_exists() or throw("initializing", "Config missing. Please run `vmaker init` first.")
 	if not choose:
 		video = get_latest_videos(RAW_PATH)[0]
 	else:
@@ -107,7 +120,7 @@ def rm(
 	"""
 	Remove the latest clip(by default) or a specified clip.
 	"""
-	check_config_exists() or throw("removing", "Config missing. Please run `vmaker init` first.")
+	check_config_exists() or throw("initializing", "Config missing. Please run `vmaker init` first.")
 	if not clip_name:
 		rm_path = get_latest_videos(CLIP_PATH) and CLIP_PATH / get_latest_videos(CLIP_PATH)[0]
 	else:

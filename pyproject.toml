@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "vmaker"
-version = "0.1.0"
+version = "0.1.2"
 description = ""
 authors = ["gaojunran <nebula2021@126.com>"]
 readme = "README.md"
@@ -10,9 +10,10 @@ vmaker = "vmaker.main:app"
 
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.8"
 typer = {extras = ["all"], version = "^0.12.3"}
 ffmpeg-python = "^0.2.0"
+asker = "^0.1.7"
 
 
 [build-system]
