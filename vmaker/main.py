@@ -13,7 +13,8 @@ from rich.prompt import Prompt
 from vmaker.constants import Lists, RenameStrategies
 from vmaker.funcs import copy, env_update, ffmpeg_cut
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
-	check_config_exists, get_video_from_name, file_backup, is_valid_path, get_curr_dir, list_dir
+	get_video_from_name, file_backup, is_valid_path, list_dir
+from vmaker.config import check_config_exists, get_curr_dir
 
 app = typer.Typer()
 

@@ -1,5 +1,3 @@
-import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -8,18 +6,13 @@ import rich
 from rich.console import Console
 from rich.table import Table
 
+from vmaker.config import get_curr_dir
 from vmaker.constants import Lists
 
 
 def list_dir(dir: Path, only_dir=False):
 	if only_dir:
 		return [p for p in dir.iterdir() if p.is_dir()]
-
-
-def get_curr_dir(clip_dir: str, curr: str = ""):
-	clip_path = Path(clip_dir)
-	curr_name = os.getenv("VMAKER") or "default"
-	return str(clip_path / curr_name)
 
 
 def is_valid_path(s, allow_not_exist=False):
@@ -38,11 +31,6 @@ def get_valid_path(s, allow_not_exist=False):
 		return Path(s)
 	else:
 		throw(f"resolving path", f"{s} is not a valid path.")
-
-
-def check_config_exists():
-	config = json.loads(os.getenv("VMAKER_CONFIG")) if os.getenv("VMAKER_CONFIG") else {}
-	return all(config.get(key) for key in Lists.CONFIG_LIST)
 
 
 def print_videos_info(videos: list[Path]):
