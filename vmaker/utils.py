@@ -13,25 +13,21 @@ from vmaker.constants import Lists
 
 def inplace(
 		operated_file: Path,
-		is_backup: bool
+		is_backup: bool = True
 ):
 	"""
-	By default, all actions which edit ONE video returns a video with a suffix ".output",
+	By default, all actions which edit ONE video returns a video with a suffix "_output",
 	This function alters this behaviour by the following steps:
-	- removing the raw video, and keeping if needed.
+	- removing the raw video, and keeping it if needed.
 	- renaming the new video.
-
 	"""
 	name = operated_file.name  # video.mp4
 	if is_backup:
 		file_backup(operated_file)
-	else:
-		operated_file.unlink()
-	# find a video based on its name
+	operated_file.unlink()
+	# find a backup video based on its name
 	new_video = get_video_from_name(name, operated_file.parent)
-	new_video.rename(operated_file.stem)
-
-
+	new_video.rename(operated_file.parent / new_video.name.replace("_output", ""))
 
 
 def list_dir(dir: Path,
@@ -93,12 +89,12 @@ def print_videos_info(videos: list[Path]):
 def get_latest_videos(dir: Path, num=1):
 	all_files = list(dir.glob('**/*'))
 	video_files = [file for file in all_files if file.suffix in ['.mp4', '.mkv']]
-	return sorted(video_files, key=lambda file: file.stat().st_mtime)[:num]
+	return sorted(video_files, key=lambda file: file.stat().st_mtime, reverse=True)[:num]
 
 
 def get_video_from_name(name: str, dir: Path) -> Path | None:
 	for file in dir.iterdir():
-		number = file.split('-')[0] if '-' in file.name else None
+		number = file.stem.split('-')[0] if '-' in file.name else None
 		# find the file "example.mp4" by the name "example"
 		if file.suffix in Lists.VIDEO_EXTS and (file.stem == name or number == name):
 			return file

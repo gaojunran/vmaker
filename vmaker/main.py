@@ -220,7 +220,7 @@ def mute(
 	clip_input = get_video_from_name(clip_name, config.curr_path)
 	ffmpeg_mute(
 		clip_input,
-		clip_input.with_name(clip_input.name + ".output")
+		clip_input.with_stem(clip_input.stem + "_output")
 	)
 	inplace(clip_input, is_backup)
 
