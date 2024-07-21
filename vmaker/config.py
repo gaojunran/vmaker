@@ -23,15 +23,19 @@ def _set_env_var(name, value):
 
 class Config:
 
+	def with_curr_dirname(self, curr_dirname):
+		self.curr_path = Path(self.clip_path / curr_dirname)
+		self.curr_path.mkdir(parents=True, exist_ok=True)
+		return copy(self)
+
 	def __init__(self, raw_dir, clip_dir, output_dir, curr_dirname):
+		self.curr_path = None   # define but not assign
 		self.raw_path = Path(raw_dir)
 		self.clip_path = Path(clip_dir)
 		self.output_path = Path(output_dir)
-		self.curr_path = Path(self.clip_path / curr_dirname)
-		self.curr_path.mkdir(parents=True, exist_ok=True)
+		self.with_curr_dirname(curr_dirname)
 
 
-	# factory method
 	@classmethod
 	def load(cls) -> "Config":
 		from vmaker.utils import throw
@@ -50,7 +54,11 @@ class Config:
 		config_dict["raw_dir"] = str(config.raw_path)
 		config_dict["clip_dir"] = str(config.clip_path)
 		config_dict["output_dir"] = str(config.output_path)
+		config_dict["curr_dirname"] = config.curr_path.name
 		_set_env_var("VMAKER_CONFIG", json.dumps(config_dict))
 
 
-if __name__ == '__main__':
+	def __str__(self):
+		return f"Config(raw_dir={self.raw_path}, clip_dir={self.clip_path}, output_dir={self.output_path}, curr_dirname={self.curr_path.name})"
+
+

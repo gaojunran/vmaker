@@ -13,7 +13,8 @@ vmaker = "vmaker.main:app"
 python = "^3.8"
 typer = {extras = ["all"], version = "^0.12.3"}
 ffmpeg-python = "^0.2.0"
-asker = "^0.1.7"
+setuptools = "^70.3.0"
+questionary = "^2.0.1"
 
 
 [build-system]

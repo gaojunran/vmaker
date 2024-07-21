@@ -44,12 +44,8 @@ def ffmpeg_cut(clip_input: Path, start_time: str, end_time: str, clip_output: Pa
 		.run()
 
 
-def ffmpeg_mute(clip_input: Path, music_input: Path, is_mute: bool, clip_output: Path):
+def ffmpeg_mute(clip_input: Path, clip_output: Path):
 	ffmpeg.input(str(clip_input.resolve())) \
 		.filter('volume', 0) \
 		.output(str(clip_output.resolve())) \
 		.run()
-
-
-def ffmpeg_lyric():
-	pass

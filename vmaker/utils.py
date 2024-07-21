@@ -1,18 +1,55 @@
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
+import questionary
 import rich
 from rich.console import Console
 from rich.table import Table
 
-from vmaker.config import get_curr_dir
 from vmaker.constants import Lists
 
 
-def list_dir(dir: Path, only_dir=False):
-	if only_dir:
-		return [p for p in dir.iterdir() if p.is_dir()]
+def inplace(
+		operated_file: Path,
+		is_backup: bool
+):
+	"""
+	By default, all actions which edit ONE video returns a video with a suffix ".output",
+	This function alters this behaviour by the following steps:
+	- removing the raw video, and keeping if needed.
+	- renaming the new video.
+
+	"""
+	name = operated_file.name  # video.mp4
+	if is_backup:
+		file_backup(operated_file)
+	else:
+		operated_file.unlink()
+	# find a video based on its name
+	new_video = get_video_from_name(name, operated_file.parent)
+	new_video.rename(operated_file.stem)
+
+
+
+
+def list_dir(dir: Path,
+			 only_file=False,
+			 only_dir=False,
+			 return_name=False
+			 ):
+	if only_file and only_dir:
+		raise ValueError("only_file and only_dir cannot both be True")
+
+	def generator():
+		for p in dir.iterdir():
+			p: Path
+			if (only_file and p.is_dir()) or (only_dir and p.is_file()):
+				continue
+			yield p.name if return_name else p
+
+	return list(generator())
 
 
 def is_valid_path(s, allow_not_exist=False):
@@ -61,8 +98,12 @@ def get_latest_videos(dir: Path, num=1):
 
 def get_video_from_name(name: str, dir: Path) -> Path | None:
 	for file in dir.iterdir():
-		number = file.split('-')[0]
+		number = file.split('-')[0] if '-' in file.name else None
+		# find the file "example.mp4" by the name "example"
 		if file.suffix in Lists.VIDEO_EXTS and (file.stem == name or number == name):
+			return file
+		# find the backup file "example_output.mp4" by the name "example.mp4"
+		elif "_output" in file.name and name.split(".")[0] in file.name:
 			return file
 	else:
 		throw("finding the video to be cut", f"Video {name} not found.")
@@ -93,4 +134,4 @@ def throw(situation: str, detail: str):
 
 
 if __name__ == '__main__':
-	print(get_curr_dir())
+	print(Path(r"D:\video.mp4.output").stem)
