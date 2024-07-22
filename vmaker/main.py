@@ -15,7 +15,7 @@ from rich.prompt import Prompt
 from vmaker.constants import Lists, RenameStrategies
 from vmaker.funcs import copy, ffmpeg_cut, ffmpeg_mute
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
-	get_video_from_name, file_backup, is_valid_path, list_dir, inplace
+	get_video_from_name, file_backup, is_valid_path, list_dir, inplace, confirm_operation, succeed_operation
 from vmaker.config import Config
 
 app = typer.Typer()
@@ -134,16 +134,11 @@ def rm(
 	if not rm_path.exists():
 		throw("removing", f"The file {rm_path} does not exist.")
 
-	rich.print(
-		f"Will remove the video below: ")
-	print_videos_info([rm_path])
-	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
-	if choice == "Y":
+	if confirm_operation("Will remove the video below: ", [rm_path]):
 		# action
 		Path(rm_path).unlink()
 		rich.print("[bold green]Success![/bold green]")
 		count_videos(config.curr_path)
-	Path(rm_path).unlink()
 
 
 @app.command()
@@ -152,9 +147,6 @@ def cut(
 		start_time: Annotated[
 			str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")],
 		end_time: Annotated[str, typer.Argument(help="format: 01:02:03 for 1 hour 2 minutes 3 seconds.")],
-		rename_strategy: Annotated[int, typer.Option("--rename", "-r",
-													 help="Rename strategy. See the doc for more choices.")] = RenameStrategies.RENAME_WITH_SUFFIX,
-		is_keep: Annotated[bool, typer.Option("--keep", "-k", help="Keep the original video or not.")] = False,
 		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
 ):
 	"""
@@ -166,50 +158,32 @@ def cut(
 		throw("checking parameters", "Invalid time format. Correct format: `01:02:03`. ")
 
 	clip_input = get_video_from_name(clip_name, config.curr_path)
-	rich.print(
-		f"Will cut the video below from [green]{start_time}[/green] to [green]{end_time}[/green]. ")
-	print_videos_info([clip_input])
-	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
-	if choice == "Y":
-		# action
-		if rename_strategy == RenameStrategies.RENAME_WITH_SUFFIX:
-			is_backup and file_backup(clip_input, config.curr_path)
-			ffmpeg_cut(clip_input, start_time, end_time, clip_input.with_stem(clip_input.stem + "_cut"))
-		rich.print("[bold green]Success![/bold green]")
-	is_keep or clip_input.unlink()
+	if confirm_operation(f"Will CUT the following video from [green]{start_time}[/green] to [green]{end_time}[/green]:",
+						 [clip_input]):
+		ffmpeg_cut(
+			clip_input,
+			start_time, end_time,
+			clip_input.with_stem(clip_input.stem + "_output")
+		)
+		inplace(clip_input, is_backup)
+		succeed_operation(config.curr_path)
 
 
-# @app.command()
-# def music(
-# 		clip_name: Annotated[str, typer.Argument(help="The video name to be operated.")],
-# 		music: Annotated[str, typer.Argument(help="The music file path.")],
-# 		is_mute: Annotated[bool, typer.Option("--mute", "-m", help="Mute the original audio or not.")] = False,
-# 		rename_strategy: Annotated[int, typer.Option("--rename", "-r",
-# 													 help="Rename strategy. See the doc for more choices.")] = RenameStrategies.RENAME_WITH_SUFFIX,
-# 		is_keep: Annotated[bool, typer.Option("--keep", "-k", help="Keep the original video or not.")] = False,
-# 		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
-# ):
-# 	"""
-# 	Add background music to a video.
-# 	"""
-#
-# 	is_valid_path(music) or throw("checking parameters", f"Invalid music file path {music}.")
-# 	clip_input = get_video_from_name(clip_name, CLIP_PATH)
-# 	rich.print(
-# 		f"Will add music [green]{music}[/green] to the video below. ")
-# 	print_videos_info([clip_input])
-# 	is_mute and rich.print("[blue]Will MUTE the original audio.[/blue]")
-# 	is_keep or rich.print("[blue]Will NOT keep the original video file.[/blue]")
-# 	is_backup and rich.print("[blue]Will back up the original video file.[/blue]")
-# 	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
-# 	if choice == "Y":
-# 		# action
-# 		if rename_strategy == RenameStrategies.RENAME_WITH_SUFFIX:
-# 			is_backup and file_backup(clip_input, CLIP_PATH)
-# 			is_mute and ffmpeg_mute(clip_input, clip_input.with_stem(clip_input.stem + "_mute"))
-# 			ffmpeg_music(clip_input, clip_input.with_stem(clip_input.stem + "_music"))
-# 		rich.print("[bold green]Success![/bold green]")
-# 	is_keep or clip_input.unlink()
+@app.command()
+def convert(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be converted.")],
+		suffix: Annotated[str, typer.Argument(help="The suffix of the converted video, such as `.mkv`.")],
+
+):
+
+
+@app.command()
+def rename(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be renamed.")],
+		new_name: Annotated[str, typer.Argument(help="The new name of the video.")],
+		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
+):
+	pass
 
 @app.command()
 def mute(
@@ -218,12 +192,13 @@ def mute(
 ):
 	config = Config.load()
 	clip_input = get_video_from_name(clip_name, config.curr_path)
-	ffmpeg_mute(
-		clip_input,
-		clip_input.with_stem(clip_input.stem + "_output")
-	)
-	inplace(clip_input, is_backup)
-
+	if confirm_operation("Will MUTE the following video(s):", [clip_input]):
+		ffmpeg_mute(
+			clip_input,
+			clip_input.with_stem(clip_input.stem + "_output")
+		)
+		inplace(clip_input, is_backup)
+		succeed_operation(config.curr_path)
 
 @app.command()
 def cfg():

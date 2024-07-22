@@ -1,3 +1,5 @@
+import os
+import platform
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +12,32 @@ from rich.table import Table
 
 from vmaker.constants import Lists
 
+
+def succeed_operation(
+	dir: Path
+):
+	rich.print("\n\n[bold green]Success![/bold green]")
+	if platform.system() == "Windows":
+		command_line = f"explorer \"{str(dir)}\""
+		choice = questionary.confirm("Check the videos in Explorer?").ask()
+		choice and os.system(command_line)
+	elif platform.system() == "Linux":
+		command_line = f"xdg-open \"{str(dir)}\""
+		choice = questionary.confirm("Check the videos in File Manager?").ask()
+		choice and os.system(command_line)
+	elif platform.system() == "Darwin":
+		command_line = f"open \"{str(dir)}\""
+		choice = questionary.confirm("Check the videos in Finder?").ask()
+		choice and os.system(command_line)
+
+def confirm_operation(
+		prompt: str,
+		operated_files: list[Path],
+):
+	rich.print(prompt)
+	print_videos_info(operated_files)
+	choice = questionary.confirm("Sure to continue?").ask()
+	return choice
 
 def inplace(
 		operated_file: Path,
@@ -102,7 +130,7 @@ def get_video_from_name(name: str, dir: Path) -> Path | None:
 		elif "_output" in file.name and name.split(".")[0] in file.name:
 			return file
 	else:
-		throw("finding the video to be cut", f"Video {name} not found.")
+		throw("finding the video", f"Video {name} not found.")
 
 
 def count_videos(dir: Path):
