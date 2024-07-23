@@ -1,22 +1,17 @@
-import json
-import os
 import re
 from pathlib import Path
 from typing import Annotated, List
 
 import questionary
-from asker import ask
-
 import rich
 import typer
 from questionary import select, text
-from rich.prompt import Prompt
 
-from vmaker.constants import Lists, RenameStrategies
-from vmaker.funcs import copy, ffmpeg_cut, ffmpeg_mute, ffmpeg_convert
-from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
-	get_video_from_name, file_backup, is_valid_path, list_dir, inplace, confirm_operation, succeed_operation
 from vmaker.config import Config
+from vmaker.constants import Lists, RenameStrategies
+from vmaker.funcs import copy, ffmpeg_cut, ffmpeg_mute, ffmpeg_convert, ffmpeg_speed, ffprobe_duration
+from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
+	get_video_from_name, list_dir, inplace, confirm_operation, succeed_operation, to_hsm
 
 app = typer.Typer()
 
@@ -225,6 +220,26 @@ def mute(
 		inplace(clip_input, is_backup)
 		succeed_operation(config.curr_path)
 
+
+@app.command()
+def speed(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be operated.")],
+		speedx: Annotated[float, typer.Argument(help="The speed to be changed to, e.g. 0.5 means half speed, 2 means double speed.")],
+		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
+):
+	"""
+	Change the speed of a video.
+	"""
+	config = Config.load()
+	clip_input = get_video_from_name(clip_name, config.curr_path)
+	if confirm_operation(f"Will change the SPEED of the following video from 1.0x to {speedx}x, \nWhich means its duration will be changed from {to_hsm(ffprobe_duration(clip_input))} to about {to_hsm(int(ffprobe_duration(clip_input) / speedx))}:", [clip_input]):
+		ffmpeg_speed(
+			clip_input,
+			clip_input.with_stem(clip_input.stem + "_output"),
+			speedx
+		)
+		inplace(clip_input, is_backup)
+		succeed_operation(config.curr_path)
 
 @app.command()
 def cfg():

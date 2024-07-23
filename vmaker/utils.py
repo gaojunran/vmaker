@@ -14,6 +14,18 @@ from vmaker.constants import Lists
 
 
 
+def to_hsm(seconds):
+	"""
+	Convert seconds to a formatted string in the format of HH:MM:SS.
+
+	:param seconds: Total number of seconds
+	:return: Formatted time string
+	"""
+	hours = seconds // 3600
+	minutes = (seconds % 3600) // 60
+	seconds = seconds % 60
+	return f"{hours:02}:{minutes:02}:{seconds:02}"
+
 def succeed_operation(
 	dir: Path
 ):
@@ -109,7 +121,7 @@ def print_videos_info(videos: list[Path]):
 			str(idx),
 			video.name,
 			datetime.fromtimestamp(video.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-			ffprobe_duration(video),
+			to_hsm(ffprobe_duration(video)),
 			str(round(video.stat().st_size / 1024 / 1024, 2)),
 		)
 	console = Console()
