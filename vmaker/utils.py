@@ -13,6 +13,7 @@ from rich.table import Table
 from vmaker.constants import Lists
 
 
+
 def succeed_operation(
 	dir: Path
 ):
@@ -36,7 +37,7 @@ def confirm_operation(
 ):
 	rich.print(prompt)
 	print_videos_info(operated_files)
-	choice = questionary.confirm("Sure to continue?").ask()
+	choice = questionary.confirm("Sure to continue? After your choice, please wait until an explicit `Success!`.").ask()
 	return choice
 
 def inplace(
@@ -95,11 +96,12 @@ def get_valid_path(s, allow_not_exist=False):
 
 
 def print_videos_info(videos: list[Path]):
+	from vmaker.funcs import ffprobe_duration
 	table = Table()
 	table.add_column("Idx", justify="right", style="dim")
 	table.add_column("Name", justify="right", style="cyan", no_wrap=True)
 	table.add_column("Datetime", justify="right", style="magenta")
-	table.add_column("Length(H:S:M)", justify="right", style="green")
+	table.add_column("Duration(H:S:M)", justify="right", style="green")
 	table.add_column("Size(MB)", justify="right", style="green")
 	for idx, video in enumerate(videos):
 		video: Path
@@ -107,7 +109,7 @@ def print_videos_info(videos: list[Path]):
 			str(idx),
 			video.name,
 			datetime.fromtimestamp(video.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-			"TODO",
+			ffprobe_duration(video),
 			str(round(video.stat().st_size / 1024 / 1024, 2)),
 		)
 	console = Console()

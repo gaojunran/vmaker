@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 
 import questionary
 from asker import ask
@@ -13,7 +13,7 @@ from questionary import select, text
 from rich.prompt import Prompt
 
 from vmaker.constants import Lists, RenameStrategies
-from vmaker.funcs import copy, ffmpeg_cut, ffmpeg_mute
+from vmaker.funcs import copy, ffmpeg_cut, ffmpeg_mute, ffmpeg_convert
 from vmaker.utils import print_videos_info, get_latest_videos, count_videos, throw, \
 	get_video_from_name, file_backup, is_valid_path, list_dir, inplace, confirm_operation, succeed_operation
 from vmaker.config import Config
@@ -73,7 +73,7 @@ def curr(
 		Config.dump(config.with_curr_dirname(curr_dirname))
 	else:
 		Config.dump(config.with_curr_dirname(dir_name))
-	typer.echo("Success! If it still doesn't work well, please reboot the terminal.")
+	typer.echo("Success! If it still doesn't work well, please restart the terminal.")
 
 
 @app.command()
@@ -90,25 +90,26 @@ def add(
 	if not choose:
 		video = get_latest_videos(config.raw_path)[0]
 	else:
-		choices = get_latest_videos(config.raw_path, 6)
+		choices = get_latest_videos(config.raw_path, 20)
 		print_videos_info(choices)
-		index = Prompt.ask("Choose one from above: ", choices=["0", "1", "2", "3", "4", "5"], default="0")
+		index = questionary.text("Enter the Idx to choose: ").ask()
 		video = choices[int(index)]
 	suffix = video.suffix
 
 	if not new_name:
-		if rename_strategy == RenameStrategies.DONT_RENAME:
+		new_name = questionary.text(
+			"Do you forget to give the clip a new name? Input a new name or just enter to avoid renaming. \n").ask()
+		if not new_name and rename_strategy == RenameStrategies.DONT_RENAME:
 			final_name = video.name
 	# elif rename_strategy == RenameStrategies.RENAME_WITH_TIME:
 	# 	final_name = video.stem + "_" + video.stat().st_mtime + suffix
-	else:
-		final_name = new_name + suffix
+		else:
+			final_name = new_name + suffix
 
 	rich.print(
 		f"Will copy the video below to [green]{str(config.curr_path)}[/green] with the new name [green]{final_name}[/green]. ")
 	print_videos_info([video])
-	choice = Prompt.ask("Sure to continue?", choices=["Y", "n"], default="Y")
-	if choice == "Y":
+	if questionary.confirm("Sure to continue? After your choice, please wait until an explicit `Success!`.").ask():
 		# action
 		copy(video, config.curr_path / final_name)
 		rich.print("[bold green]Success![/bold green]")
@@ -116,27 +117,47 @@ def add(
 
 
 @app.command()
+def convert(
+		clip_name: Annotated[str, typer.Argument(help="The video name to be converted.")] = None,
+		suffix: Annotated[str, typer.Argument(help="The suffix of the converted video, such as `.mkv`.")] = ".mp4",
+		many: Annotated[List[str], typer.Option("--many", "-m",
+												help="Convert multiple videos at once, give clip_names separated by space.")] = None,
+		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
+):
+	config = Config.load()
+	if many and not clip_name:
+		clip_inputs = [get_video_from_name(video, config.curr_path) for video in many]
+	elif clip_name and not many:
+		clip_inputs = [get_video_from_name(clip_name, config.curr_path)]
+	else:
+		throw("checking parameters", "Please give either `clip_name` or `many`. Giving both is not allowed.")
+	if confirm_operation(f"Will convert the following video(s) to [bold green]{suffix}[/bold green]:", clip_inputs):
+		for video in clip_inputs:
+			ffmpeg_convert(
+				video,
+				video.with_name(video.stem + "_output" + suffix)
+			)
+			inplace(video, is_backup)
+		succeed_operation(config.curr_path)
+
+
+@app.command()
 def rm(
-		clip_name: Annotated[str, typer.Argument(help="The video name to remove.")] = "",
+		clip_names: Annotated[List[str], typer.Argument(help="The video names to remove.")],
 ):
 	"""
-	Remove the latest clip(by default) or a specified clip.
+	Remove given clip(s).
 	"""
 	config = Config.load()
-	if not clip_name:
-		rm_path = get_latest_videos(config.curr_path) and config.curr_path / get_latest_videos(config.curr_path)[0]
-	else:
-		rm_path = get_video_from_name(clip_name, config.curr_path)
+	rm_paths = [get_video_from_name(video, config.curr_path) for video in clip_names]
 
-	if not rm_path:
-		throw("finding the latest video", "No clip to remove.")
+	if not all([p.exists() for p in rm_paths]):
+		throw("checking parameters", f"Some of the videos to be removed do not exist.")
 
-	if not rm_path.exists():
-		throw("removing", f"The file {rm_path} does not exist.")
-
-	if confirm_operation("Will remove the video below: ", [rm_path]):
+	if confirm_operation("Will remove the video below: ", rm_paths):
 		# action
-		Path(rm_path).unlink()
+		for p in rm_paths:
+			Path(p).unlink()
 		rich.print("[bold green]Success![/bold green]")
 		count_videos(config.curr_path)
 
@@ -170,26 +191,30 @@ def cut(
 
 
 @app.command()
-def convert(
-		clip_name: Annotated[str, typer.Argument(help="The video name to be converted.")],
-		suffix: Annotated[str, typer.Argument(help="The suffix of the converted video, such as `.mkv`.")],
-
-):
-
-
-@app.command()
 def rename(
 		clip_name: Annotated[str, typer.Argument(help="The video name to be renamed.")],
 		new_name: Annotated[str, typer.Argument(help="The new name of the video.")],
-		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
 ):
-	pass
+	"""
+	Rename a clip with a given new name(without suffix).
+	If you need to rename the suffix, run `vmaker convert`.
+	"""
+	config = Config.load()
+	clip_input = get_video_from_name(clip_name, config.curr_path)
+	suffix = clip_input.suffix
+	if confirm_operation(f"Will RENAME this following video to [green]{new_name}{suffix}[/green]:",
+						 [clip_input]):
+		clip_input.rename(clip_input.parent / (new_name + suffix))
+		succeed_operation(config.curr_path)
 
 @app.command()
 def mute(
 		clip_name: Annotated[str, typer.Argument(help="The video name to be operated.")],
 		is_backup: Annotated[bool, typer.Option("--backup", "-b", help="Backup the original video or not.")] = True,
 ):
+	"""
+	Mute a video.
+	"""
 	config = Config.load()
 	clip_input = get_video_from_name(clip_name, config.curr_path)
 	if confirm_operation("Will MUTE the following video(s):", [clip_input]):
@@ -200,6 +225,7 @@ def mute(
 		inplace(clip_input, is_backup)
 		succeed_operation(config.curr_path)
 
+
 @app.command()
 def cfg():
 	"""
@@ -207,3 +233,17 @@ def cfg():
 	"""
 	config = Config.load()
 	typer.echo(config)
+
+
+@app.command()
+def ls():
+	"""
+	list all videos in the current directory.
+	"""
+	config = Config.load()
+	dir = config.curr_path
+	all_files = list(dir.glob('**/*'))
+	videos = [file for file in all_files if file.suffix in Lists.VIDEO_EXTS]
+	rich.print(f"All videos in the current directory [green]{dir}[/green]:")
+	print_videos_info(videos)
+	rich.print(f"Total: [green]{len(videos)}[/green] videos.")
